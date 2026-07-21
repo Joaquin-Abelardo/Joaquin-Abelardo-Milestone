@@ -11,7 +11,7 @@ pipeline {
 
     environment {
         // ---- EDIT THESE ----
-        SERVERS = 'ubuntu@98.82.17.110 ubuntu@44.211.193.16'   // your two web servers
+        SERVERS = 'ubuntu@98.82.17.110 ubuntu@44.211.193.16'  // your two web servers
         DOCROOT = '/var/www/html'                             // Apache default doc root
         APP_SRC = './'                                        // repo root; 'dist/' if you build
         // --------------------
@@ -32,7 +32,7 @@ pipeline {
 
         stage('Deploy') {
             steps {
-                sshagent(credentials: ['webservers-ssh-key']) {
+                sshagent(credentials: ['wax-private-key']) {
                     sh '''
                         set -eu
                         SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
