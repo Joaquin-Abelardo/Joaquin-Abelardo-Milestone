@@ -1,53 +1,134 @@
-// GitHub push -> webhook -> Jenkins -> SSH/rsync -> Apache servers (/var/www/html).
-// Uses the SSH Agent plugin + the 'webservers-ssh-key' credential. Put at repo ROOT.
-
 pipeline {
+
     agent any
 
-    options {
-        timestamps()
-        disableConcurrentBuilds()
-    }
-
     environment {
-        // ---- EDIT THESE ----
-        SERVERS = 'ubuntu@10.0.3.39 ubuntu@10.0.4.206'  // your two web servers
-        DOCROOT = '/var/www/html'                             // Apache default doc root
-        APP_SRC = './'                                        // repo root; 'dist/' if you build
-        // --------------------
+        // Azure Storage
+        STORAGE_ACCOUNT = "waxjenkinsstorage123"
+        FILE_SHARE = "jenkins-share"
+
+        // Staging (ACI)
+        ACI_URL = "http://wax-nginx-demo-2026.centralindia.azurecontainer.io/"
+
+        // Production EC2 Private IPs
+        wax-server-1 = "10.0.3.39"
+        wax-server-2 = "10.0.4.206"
+
+        REMOTE_DIR = "/var/www/html"
     }
 
     stages {
 
         stage('Checkout') {
-            steps { checkout scm }
-        }
-
-        stage('Build & Test') {
             steps {
-                // Put real build/test commands here if any, e.g. sh 'npm ci && npm run build'
-                sh 'echo "No build step — deploying repo as-is."'
+                checkout scm
             }
         }
 
-        stage('Deploy') {
+        stage('Deploy to Azure Staging') {
             steps {
-                sshagent(credentials: ['wax-private-key']) {
+                withCredentials([
+                    string(credentialsId: 'azure-storage-key', variable: 'STORAGE_KEY')
+                ]) {
                     sh '''
-                        set -eu
-                        SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-                        for HOST in ${SERVERS}; do
-                            echo "=== Deploying to ${HOST}:${DOCROOT} ==="
-                            # --rsync-path="sudo rsync" lets rsync write to /var/www/html on the server.
-                            rsync -az --delete -e "ssh ${SSH_OPTS}" --rsync-path="sudo rsync" \
-                                --exclude '.git' --exclude 'Jenkinsfile' \
-                                "${APP_SRC}" "${HOST}:${DOCROOT}/"
-                            ssh ${SSH_OPTS} "${HOST}" "sudo systemctl reload apache2"
-                            echo "=== ${HOST} updated ==="
-                        done
+                        echo "Uploading files to Azure File Share..."
+
+                        az storage file upload-batch \
+                            --account-name $STORAGE_ACCOUNT \
+                            --account-key $STORAGE_KEY \
+                            --destination $FILE_SHARE \
+                            --source .
                     '''
                 }
             }
+        }
+
+        stage('Wait for ACI') {
+            steps {
+                echo "Waiting for Azure File Share changes to be reflected..."
+                sleep(time: 20, unit: 'SECONDS')
+            }
+        }
+
+        stage('HTTP Availability Test') {
+            steps {
+                sh '''
+                    STATUS=$(curl -o /dev/null -s -w "%{http_code}" $ACI_URL)
+
+                    if [ "$STATUS" != "200" ]; then
+                        echo "ERROR: ACI returned HTTP $STATUS"
+                        exit 1
+                    fi
+
+                    echo "ACI is reachable."
+                '''
+            }
+        }
+
+        stage('Content Assertion') {
+            steps {
+                sh '''
+                    PAGE=$(curl -s $ACI_URL)
+
+                    echo "$PAGE"
+
+                    # Change "Welcome" to text that exists on your homepage
+                    echo "$PAGE" | grep -q "Wax server"
+
+                    echo "Content validation passed."
+                '''
+            }
+        }
+
+        stage('Deploy to Production') {
+            steps {
+                sshagent(['wax-private-key']) {
+                    sh '''
+                        echo "Deploying to Web Server 1..."
+
+                        rsync -avz --delete \
+                            --rsync-path="sudo rsync" \
+                            --exclude='.git' \
+                            --exclude='Jenkinsfile' \
+                            -e "ssh -o StrictHostKeyChecking=no" \
+                            ./ ubuntu@$wax-server-1:$REMOTE_DIR/
+
+                        ssh -o StrictHostKeyChecking=no ubuntu@$wax-server-1 "
+                            sudo chown -R www-data:www-data $REMOTE_DIR &&
+                            sudo systemctl restart apache2
+                        "
+
+                        echo "Deploying to Web Server 2..."
+
+                        rsync -avz --delete \
+                            --rsync-path="sudo rsync" \
+                            --exclude='.git' \
+                            --exclude='Jenkinsfile' \
+                            -e "ssh -o StrictHostKeyChecking=no" \
+                            ./ ubuntu@$wax-server-2:$REMOTE_DIR/
+
+                        ssh -o StrictHostKeyChecking=no ubuntu@$wax-server-2 "
+                            sudo chown -R www-data:www-data $REMOTE_DIR &&
+                            sudo systemctl restart apache2
+                        "
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+
+        success {
+            echo "Pipeline completed successfully."
+        }
+
+        failure {
+            echo "Pipeline failed. Production deployment was skipped."
+        }
+
+        always {
+            cleanWs()
         }
     }
 }
