@@ -11,8 +11,8 @@ pipeline {
         ACI_URL = "http://wax-nginx-demo-2026.centralindia.azurecontainer.io/"
 
         // Production EC2 Private IPs
-        wax-server-1 = "10.0.3.39"
-        wax-server-2 = "10.0.4.206"
+        WAX_SERVER_1 = "10.0.3.39"
+        WAX_SERVER_2 = "10.0.4.206"
 
         REMOTE_DIR = "/var/www/html"
     }
@@ -93,7 +93,7 @@ pipeline {
                             -e "ssh -o StrictHostKeyChecking=no" \
                             ./ ubuntu@$wax-server-1:$REMOTE_DIR/
 
-                        ssh -o StrictHostKeyChecking=no ubuntu@$wax-server-1 "
+                        ssh -o StrictHostKeyChecking=no ubuntu@$WAX_SERVER_1 "
                             sudo chown -R www-data:www-data $REMOTE_DIR &&
                             sudo systemctl restart apache2
                         "
@@ -107,7 +107,7 @@ pipeline {
                             -e "ssh -o StrictHostKeyChecking=no" \
                             ./ ubuntu@$wax-server-2:$REMOTE_DIR/
 
-                        ssh -o StrictHostKeyChecking=no ubuntu@$wax-server-2 "
+                        ssh -o StrictHostKeyChecking=no ubuntu@$WAX_SERVER_2 "
                             sudo chown -R www-data:www-data $REMOTE_DIR &&
                             sudo systemctl restart apache2
                         "
