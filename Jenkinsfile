@@ -28,7 +28,7 @@ pipeline {
         stage('Deploy to Azure Staging') {
             steps {
                 withCredentials([
-                    string(credentialsId: 'azure-storage-key', variable: 'STORAGE_KEY')
+                    string(credentialsId: 'azure-private-key', variable: 'STORAGE_KEY')
                 ]) {
                     sh '''
                         echo "Uploading files to Azure File Share..."
