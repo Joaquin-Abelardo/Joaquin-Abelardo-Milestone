@@ -91,7 +91,7 @@ pipeline {
                             --exclude='.git' \
                             --exclude='Jenkinsfile' \
                             -e "ssh -o StrictHostKeyChecking=no" \
-                            ./ ubuntu@$wax-server-1:$REMOTE_DIR/
+                            ./ ubuntu@$WAX_SERVER_1:$REMOTE_DIR/
 
                         ssh -o StrictHostKeyChecking=no ubuntu@$WAX_SERVER_1 "
                             sudo chown -R www-data:www-data $REMOTE_DIR &&
@@ -105,7 +105,7 @@ pipeline {
                             --exclude='.git' \
                             --exclude='Jenkinsfile' \
                             -e "ssh -o StrictHostKeyChecking=no" \
-                            ./ ubuntu@$wax-server-2:$REMOTE_DIR/
+                            ./ ubuntu@$WAX_SERVER_2:$REMOTE_DIR/
 
                         ssh -o StrictHostKeyChecking=no ubuntu@$WAX_SERVER_2 "
                             sudo chown -R www-data:www-data $REMOTE_DIR &&
